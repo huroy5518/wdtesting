@@ -1,0 +1,26 @@
+# 'menu' creates the new submenu
+menu "Test Driver Package"
+#    # 'depends on' makes this entire menu visible ONLY if 
+#    # the main 'myutil' package is selected (as 'y' or 'm').
+#    depends on CONFIG_PACKAGE_wifi-driver-testing
+
+    # 'config' defines a new variable
+config TEST_DRIVER_PACKAGE
+    # 'string' sets the variable type to a string
+    # The text in quotes is the prompt the user will see
+    string "Enter Driver package for example: package/mac80211-qca"
+    default "package/mac80211-qca"
+    help
+      This would be used to find the path to make
+
+config ENABLE_TEST_SUIT_PATH
+    bool "Enable test suit from different path"
+    default n
+
+# You can add other options to this menu
+config TEST_SUIT_PATH
+    string "Test Suit Path for testing, default to package path"
+    default ""
+    depends on ENABLE_TEST_SUIT_PATH
+
+endmenu
