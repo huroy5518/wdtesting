@@ -1,4 +1,5 @@
 include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=wifi-driver-testing
 PKG_VERSION:=1.0
@@ -6,6 +7,8 @@ PKG_RELEASE:=1
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
 SRC_DIR=src
+
+KERNEL_INCLUDE_OPT:=-I$(LINUX_DIR)/include -I$(LINUX_DIR)/user_headers/include
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -35,7 +38,9 @@ define Build/Compile
 		$(TARGET_CONFIGURE_OPTS) \
 		CC="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)"
+		LDFLAGS="$(TARGET_LDFLAGS)" \
+		KERNEL_INCLUDE_OPT="$(KERNEL_INCLUDE_OPT)" \
+		MAKE="$(MAKE)"
 endef
 
 define Package/wifi-driver-testing/install

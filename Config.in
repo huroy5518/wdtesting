@@ -12,6 +12,10 @@ config TEST_DRIVER_PACKAGE
     default "package/mac80211-qca"
     help
       This would be used to find the path to make
+      
+config TARGET_MACHINE_DTS_PATH
+    string "Enter DTS Path"
+    default "./feeds/feed_qca/qca/ipq95xx/ipq95xx/files-6.1/arch/arm64/boot/dts/qcom/ipq9574-lrg1.dts"
 
 config ENABLE_TEST_SUIT_PATH
     bool "Enable test suit from different path"
