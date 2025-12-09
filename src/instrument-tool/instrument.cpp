@@ -9,6 +9,7 @@
 #include <stack>
 #include <iostream>
 #include <vector>
+#include <fstream>
 
 using namespace clang;
 using namespace clang::tooling;
@@ -20,16 +21,45 @@ static llvm::cl::OptionCategory InstrumentCategory("instrument-options");
 
 class InstrumentationVisitor : public RecursiveASTVisitor<InstrumentationVisitor> {
 public:
-    explicit InstrumentationVisitor(Rewriter &R) : TheRewriter(R) {}
+    struct BlockInfo {
+        std::string block_name;
+        int block_id;
+        int block_type;
+        int start_line;
+        int end_line;
+    };
+    explicit InstrumentationVisitor(Rewriter &R) : BlockCount(0), TheRewriter(R) {}
+
+    ~InstrumentationVisitor() {
+        if (BlockRegistry.size()) {
+            std::cout << "=== Instrumented Blocks ===\n";
+            std::ofstream outputFile("_wdtest_gen_info.txt");
+            outputFile << "Block ID, Name, Start Line, End Line\n";
+            for (const auto &entry : BlockRegistry) {
+                const BlockInfo &info = entry.second;
+                outputFile << info.block_id << ", " << info.block_name << ", " << info.start_line << ", " << info.end_line << std::endl;
+                        //   << ", Name: " << info.block_name 
+                        //   << ", Lines: " << info.start_line << "-" << info.end_line << "\n";
+            }
+        }
+    }
+
 
     // Track the names of active blocks to determine how many end_func() calls to generate on return
-    std::vector<std::string> ScopeStack;
+    std::vector<std::pair<std::string, int>> ScopeStack;
+    
 
     // Helper to inject code at the start of a block
     void InstrumentBlockStart(CompoundStmt *CS, StringRef Name) {
         SourceLocation StartLoc = CS->getLBracLoc().getLocWithOffset(1);
+        
+        int StartLine = TheRewriter.getSourceMgr().getPresumedLoc(StartLoc).getLine();
+        int EndLine = TheRewriter.getSourceMgr().getPresumedLoc(CS->getRBracLoc()).getLine();
+        std::cout << "Instrumenting block '" << Name.str() << "' from line " << ' ' << BlockCount << ' ' << StartLine << " to " << EndLine << "\n";
+        BlockRegistry[BlockCount] = {Name.str(), BlockCount, 0, StartLine, EndLine};
         std::stringstream SS;
-        SS << "\n    beginning_func(\"" << Name.str() << "\");";
+        SS << "\n    beginning_func(" << BlockCount << ");";
+        BlockCount ++;
         TheRewriter.InsertText(StartLoc, SS.str(), true, true);
     }
 
@@ -44,13 +74,16 @@ public:
         // Convert SourceLocation to a PresumedLoc to get line/column
         // This handles macros and #line directives correctly
         PresumedLoc PLoc = SM.getPresumedLoc(Loc);
-        llvm::outs() << PLoc.getFilename() << "\n" << PLoc.getLine() << "\n";
+        // llvm::outs() << PLoc.getFilename() << "\n" << PLoc.getLine() << "\n";
         if (return_state.size()) {
             return_state.pop_back();
             return;
         }
         SourceLocation EndLoc = CS->getRBracLoc();
-        TheRewriter.InsertText(EndLoc, "\n    end_func();\n", true, true);
+        auto &x = ScopeStack.back();
+        std::stringstream SS;
+        SS << "\n   end_func(" << x.second << ");\n";
+        TheRewriter.InsertText(EndLoc, SS.str(), true, true);
     }
 
     // --- Traversal Overrides ---
@@ -62,7 +95,7 @@ public:
             std::string Name = FD->getNameInfo().getName().getAsString();
             
             // Push scope
-            ScopeStack.push_back(Name);
+            ScopeStack.push_back({Name, BlockCount});
             
             // Instrument the body if it's a compound statement
             if (CompoundStmt *CS = dyn_cast<CompoundStmt>(FD->getBody())) {
@@ -94,15 +127,13 @@ public:
         
         // Handle "Then" block
         if (CompoundStmt *CS = dyn_cast_or_null<CompoundStmt>(IS->getThen())) {
-            llvm::outs() << "Before if\n";
-            ScopeStack.push_back("if");
+            ScopeStack.push_back({"if", BlockCount});
             InstrumentBlockStart(CS, "if");
             
             // Manually traverse the Then block to maintain scope state
             TraverseStmt(IS->getThen());
             
             InstrumentBlockEnd(CS);
-            llvm::outs() << "After if\n";
             ScopeStack.pop_back();
         } else {
             // Traverse without instrumentation (single line if)
@@ -112,7 +143,7 @@ public:
         // Handle "Else" block
         if (IS->getElse()) {
             if (CompoundStmt *CS = dyn_cast_or_null<CompoundStmt>(IS->getElse())) {
-                ScopeStack.push_back("else");
+                ScopeStack.push_back({"else", BlockCount});
                 InstrumentBlockStart(CS, "else");
                 TraverseStmt(IS->getElse());
                 InstrumentBlockEnd(CS);
@@ -132,7 +163,7 @@ public:
     // 3. Loops (For, While, Do) - Simplified example for While
     bool TraverseWhileStmt(WhileStmt *WS) {
         if (CompoundStmt *CS = dyn_cast_or_null<CompoundStmt>(WS->getBody())) {
-            ScopeStack.push_back("while");
+            ScopeStack.push_back({"while", BlockCount});
             InstrumentBlockStart(CS, "while");
             TraverseStmt(WS->getBody());
             InstrumentBlockEnd(CS);
@@ -156,25 +187,27 @@ public:
         // Unwind in reverse order of the stack
         if (ScopeStack.size()) {
             
-            SS << "\n  end_func();";
+            auto &x = ScopeStack.back();
+            SS << "\n  end_func(" << x.second << ");";
             SS << "\n  "; // Indentation for the return
         }
-        // for (size_t i = 0; i < ScopeStack.size(); ++i) {
-        // }
 
         // We wrap the return statement: { end_func(); ...; return X; }
         // Note: Rewriter needs to replace the entire statement.
         // This is tricky because we need the string of the original return statement.
         // For simplicity, we just insert the block start before and block end after.
-        return_state.push_back(1); TheRewriter.InsertText(RS->getBeginLoc(), SS.str(), true, true);
+        return_state.push_back(1); 
+        TheRewriter.InsertText(RS->getBeginLoc(), SS.str(), true, true);
         // TheRewriter.InsertTextAfterToken(RS->getEndLoc(), "\n}");
         
         return true;
     }
-
+    
 private:
+    int BlockCount;
     Rewriter &TheRewriter;
     std::vector<char> return_state;
+    std::map<int, BlockInfo> BlockRegistry;
 };
 
 class InstrumentationConsumer : public ASTConsumer {
@@ -194,13 +227,10 @@ class InstrumentationAction : public ASTFrontendAction {
 public:
     void EndSourceFileAction() override {
         SourceManager &SM = TheRewriter.getSourceMgr();
-        llvm::errs() << "** Outputting Instrumented Code **\n";
-        llvm::errs() << "** ??? **\n";
         TheRewriter.getEditBuffer(SM.getMainFileID()).write(llvm::outs());
     }
 
     std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
-        llvm::errs() << "** ??asdfasdf **\n";
         TheRewriter.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
         return std::make_unique<InstrumentationConsumer>(TheRewriter);
     }

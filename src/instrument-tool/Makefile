@@ -1,7 +1,12 @@
 .PHONY: all
 
+LLVM_CONFIG:=$(shell llvm-config --cxxflags --ldflags --libs)
+
+all: instrument mock
 
 instrument: instrument.cpp
-	clang++ instrument.cpp   -O3   $(llvm-config --cxxflags --ldflags --libs)   -Wl,--start-group   -lclangTooling   -lclangFrontend   -lclangSerialization   -lclangDriver   -lclangParse   -lclangSema   -lclangAnalysis   -lclangASTMatchers   -lclangEdit   -lclangAST   -lclangLex   -lclangBasic   -lclangSupport   -lclangAPINotes -lclangRewrite  -Wl,--end-group   -o instrumenter
+	clang++ instrument.cpp   -O3 $(LLVM_CONFIG)   -Wl,--start-group   -lclangTooling   -lclangFrontend   -lclangSerialization   -lclangDriver   -lclangParse   -lclangSema   -lclangAnalysis   -lclangASTMatchers   -lclangEdit   -lclangAST   -lclangLex   -lclangBasic   -lclangSupport   -lclangAPINotes -lclangRewrite  -Wl,--end-group   -o instrument
+	
+mock: mock.cpp
+	clang++ mock.cpp   -O3 $(LLVM_CONFIG)   -Wl,--start-group   -lclangTooling   -lclangFrontend   -lclangSerialization   -lclangDriver   -lclangParse   -lclangSema   -lclangAnalysis   -lclangASTMatchers   -lclangEdit   -lclangAST   -lclangLex   -lclangBasic   -lclangSupport   -lclangAPINotes -lclangRewrite  -Wl,--end-group   -o mock
 
-all: instrument
