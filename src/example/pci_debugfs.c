@@ -3,6 +3,7 @@
 #include <linux/pci.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 #define DRIVER_NAME "my_pci_debugfs"
 
@@ -107,9 +108,67 @@ static struct pci_driver my_pci_driver = {
     .remove = my_pci_remove,
 };
 
+/* Module-wide DebugFS for quick testing */
+static struct dentry *module_debugfs_dir;
+static bool module_test_running;
+static char module_test_info[128] = "idle";
+
+static ssize_t start_test_write(struct file *file, const char __user *buf,
+                                size_t len, loff_t *ppos)
+{
+    /* Store the provided message and mark as running */
+    ssize_t written = simple_write_to_buffer(module_test_info,
+                                             sizeof(module_test_info) - 1,
+                                             ppos, buf, len);
+    if (written < 0)
+        return written;
+    module_test_info[written] = '\0';
+    module_test_running = true;
+    pr_info("%s: test started with info: %s\n", DRIVER_NAME, module_test_info);
+    return len;
+}
+
+static const struct file_operations start_test_fops = {
+    .owner = THIS_MODULE,
+    .write = start_test_write,
+    .llseek = no_llseek,
+};
+
+static ssize_t get_test_info_read(struct file *file, char __user *buf,
+                                  size_t len, loff_t *ppos)
+{
+    const char *info = module_test_running ? module_test_info : "idle";
+    return simple_read_from_buffer(buf, len, ppos, info, strlen(info));
+}
+
+static const struct file_operations get_test_info_fops = {
+    .owner = THIS_MODULE,
+    .read = get_test_info_read,
+    .llseek = no_llseek,
+};
+
+/* Helper to create module-level debugfs entries */
+static void create_module_debugfs(void)
+{
+    module_debugfs_dir = debugfs_create_dir("module_init_debug", NULL);
+    if (IS_ERR(module_debugfs_dir)) {
+        pr_warn("%s: Failed to create module debugfs dir\n", DRIVER_NAME);
+        module_debugfs_dir = NULL;
+        return;
+    }
+
+    debugfs_create_file("start_test", 0200, module_debugfs_dir, NULL,
+                        &start_test_fops);
+    debugfs_create_file("get_test_info", 0400, module_debugfs_dir, NULL,
+                        &get_test_info_fops);
+}
+
 /* Module Initialization */
 static int __init my_pci_init(void)
 {
+    /* Module-level debugfs entries for quick tests */
+    create_module_debugfs();
+
     pr_info("%s: Module loaded\n", DRIVER_NAME);
     return pci_register_driver(&my_pci_driver);
 }
@@ -117,6 +176,7 @@ static int __init my_pci_init(void)
 /* Module Exit */
 static void __exit my_pci_exit(void)
 {
+    debugfs_remove_recursive(module_debugfs_dir);
     pci_unregister_driver(&my_pci_driver);
     pr_info("%s: Module unloaded\n", DRIVER_NAME);
 }
