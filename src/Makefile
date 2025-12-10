@@ -18,7 +18,7 @@ pre:
 compile:
 	echo $(KERNEL_INCLUDE_OPT)
 	echo $(MAKE)
-	make -C ath12k
+# 	make -C ath12k
 # 		CC="$(CC)" \
 #  		CFLAGS="$(CFLAGS)" \
 # 		KERNEL_INCLUDE_OPT="$(KERNEL_INCLUDE_OPT)"
