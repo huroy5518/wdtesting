@@ -32,6 +32,7 @@ int check_u64_eq(u64 a, u64 b, struct test_info);
 void init_test();
 void run_test();
 void cleanup_test();
+void MOCK_FUNC(const char* FuncName, const char* NewName);
 
 // TEST("This is a test", test_passing)
 
