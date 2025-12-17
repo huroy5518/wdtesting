@@ -9,13 +9,52 @@
 #include "clang/Tooling/Tooling.h"
 #include "clang/Lex/Lexer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Path.h"
+#include <fstream>
+#include <vector>
+#include <string>
 
 using namespace clang;
 using namespace clang::driver;
 using namespace clang::tooling;
 
-// CLI option category
 static llvm::cl::OptionCategory ToolCategory("remove-static-options");
+
+static llvm::cl::opt<std::string> OutputFileOpt(
+    "o", 
+    llvm::cl::desc("Specify output filename"),
+    llvm::cl::cat(ToolCategory)
+);
+
+static llvm::cl::opt<std::string> FlagFileOpt(
+    "flags-file", 
+    llvm::cl::desc("Path to a text file containing compiler flags"),
+    llvm::cl::cat(ToolCategory)
+);
+
+std::vector<std::string> LoadFlagsFromFile(const std::string &FilePath) {
+    std::vector<std::string> Flags;
+    std::ifstream File(FilePath);
+    if (!File.is_open()) return Flags;
+    std::string Line;
+    while (std::getline(File, Line)) {
+        if (Line.empty() || Line[0] == '#') continue;
+        size_t first = Line.find_first_not_of(" \t\r\n");
+        size_t last = Line.find_last_not_of(" \t\r\n");
+        if (first == std::string::npos) continue;
+        Flags.push_back(Line.substr(first, (last - first + 1)));
+    }
+    return Flags;
+}
+
+bool isBlocked(const std::string &Arg) {
+    static const std::vector<std::string> Blocklist = {
+        "-fno-allow-store-data-races", "-fconserve-stack", "-femit-struct-debug-baseonly",
+        "-mabi=lp64", "-fno-var-tracking-assignments"
+    };
+    for (const auto &Bad : Blocklist) if (Arg == Bad) return true;
+    return false;
+}
 
 class StaticRemoverVisitor : public RecursiveASTVisitor<StaticRemoverVisitor> {
 private:
@@ -26,56 +65,82 @@ public:
     StaticRemoverVisitor(ASTContext *Context, Rewriter &R)
         : Context(Context), TheRewriter(R) {}
 
-    // Visit Function Declarations (includes C++ methods)
     bool VisitFunctionDecl(FunctionDecl *FD) {
-        if (FD->isStatic()) {
+        if (FD->isStatic() || FD->getStorageClass() == SC_Static) {
+            llvm::errs() << "[DEBUG] Processing Function: " << FD->getNameAsString() << "\n";
             RemoveStaticKeyword(FD);
         }
         return true;
     }
 
-    // Visit Variable Declarations (includes globals, locals, and static members)
     bool VisitVarDecl(VarDecl *VD) {
         if (VD->isStaticLocal() || VD->getStorageClass() == SC_Static) {
+            llvm::errs() << "[DEBUG] Processing Variable: " << VD->getNameAsString() << "\n";
             RemoveStaticKeyword(VD);
         }
         return true;
     }
 
-    // Helper to perform the actual text removal
     void RemoveStaticKeyword(Decl *D) {
         SourceManager &SM = Context->getSourceManager();
         
-        // 1. Safety check: Only modify the main file, not system headers
-        if (!SM.isInMainFile(D->getLocation())) return;
+        // 1. Get Physical Locations (ignores macros)
+        SourceLocation StartLoc = SM.getFileLoc(D->getBeginLoc());
+        SourceLocation EndLoc = SM.getFileLoc(D->getLocation());
 
-        // 2. Define the search range. 
-        // We search from the start of the declaration up to the variable/function name.
-        // This prevents us from scanning into the function body or past the variable identifier.
-        SourceLocation StartLoc = D->getBeginLoc();
-        SourceLocation EndLoc = D->getLocation(); // Location of the identifier
+        // 2. Main File Check
+        if (SM.getFileID(StartLoc) != SM.getMainFileID()) {
+             // llvm::errs() << "  [Skip] Not in main file\n";
+             return;
+        }
 
-        // 3. Tokenize (Lex) the range to find "static"
-        LangOptions LangOpts = Context->getLangOpts();
-        SourceLocation CurrentLoc = StartLoc;
+        // 3. ROBUST TEXT SEARCH STRATEGY
+        // Instead of asking Lexer for tokens (which fails on kernel macros),
+        // we grab the raw text buffer between start and the name.
+        bool Invalid = false;
+        const char *BufferStart = SM.getCharacterData(StartLoc, &Invalid);
         
-        while (CurrentLoc < EndLoc) {
-            Token Tok;
-            // Get raw token from source
-            bool Failed = Lexer::getRawToken(CurrentLoc, Tok, SM, LangOpts, true);
-            if (Failed) break;
+        if (Invalid) {
+            llvm::errs() << "  [FAIL] Invalid buffer access.\n";
+            return;
+        }
 
-            if (Tok.is(tok::kw_static)) {
-                // Found it! Remove the text.
-                TheRewriter.RemoveText(CurrentLoc, Tok.getLength());
-                
-                // Optional: Attempt to remove the space following 'static' to keep formatting clean
-                // Check if the next char is a space and remove it too if desired.
-                break; // Stop after finding the first static keyword for this decl
+        // Calculate distance to search (from start of decl to the identifier name)
+        unsigned OffsetStart = SM.getFileOffset(StartLoc);
+        unsigned OffsetEnd = SM.getFileOffset(EndLoc);
+        
+        if (OffsetEnd <= OffsetStart) {
+            llvm::errs() << "  [FAIL] End offset is before start.\n";
+            return;
+        }
+
+        unsigned Length = OffsetEnd - OffsetStart;
+        if (Length > 2000) Length = 2000; // Safety cap
+
+        // Create a string view of the source code
+        StringRef CodeSnippet(BufferStart, Length);
+
+        // Find "static"
+        // We look for "static" followed by a non-identifier character (space, tab, newline)
+        // to avoid matching "static_variable_name"
+        size_t Pos = CodeSnippet.find("static");
+        
+        if (Pos != StringRef::npos) {
+            // Check boundaries to ensure it's a whole word
+            // (Simplification: in C, static is usually at the start or surrounded by spaces)
+            
+            SourceLocation StaticKeywordLoc = StartLoc.getLocWithOffset(Pos);
+            TheRewriter.RemoveText(StaticKeywordLoc, 6); // Remove "static" (len 6)
+            
+            // Optional: Remove trailing space
+            if (Pos + 6 < Length && isspace(CodeSnippet[Pos + 6])) {
+                 TheRewriter.RemoveText(StaticKeywordLoc.getLocWithOffset(6), 1);
             }
 
-            // Move to next token
-            CurrentLoc = Tok.getEndLoc();
+            llvm::errs() << "  [SUCCESS] Removed 'static' via buffer search.\n";
+        } else {
+            llvm::errs() << "  [FAIL] Keyword 'static' not found in raw text buffer.\n";
+            llvm::errs() << "  [Snapshot] " << CodeSnippet.take_front(50) << "...\n";
         }
     }
 };
@@ -98,14 +163,29 @@ private:
     Rewriter TheRewriter;
 
 public:
-    virtual void EndSourceFileAction() override {
+    void EndSourceFileAction() override {
         SourceManager &SM = TheRewriter.getSourceMgr();
-        llvm::errs() << "** Outputting processed file to stdout **\n";
-        TheRewriter.getEditBuffer(SM.getMainFileID()).write(llvm::outs());
+        FileID MainFileID = SM.getMainFileID();
+        
+        std::string NewFilename;
+        if (!OutputFileOpt.empty()) {
+            NewFilename = OutputFileOpt;
+        } else {
+            NewFilename = "output.c"; 
+        }
+
+        std::error_code EC;
+        llvm::raw_fd_ostream OutFile(NewFilename, EC, llvm::sys::fs::OF_None);
+        if (EC) {
+            llvm::errs() << "[!] Error writing: " << EC.message() << "\n";
+            return;
+        }
+
+        TheRewriter.getEditBuffer(MainFileID).write(OutFile);
+        llvm::outs() << "[*] Saved: " << NewFilename << "\n";
     }
 
-    virtual std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
-                                                           StringRef file) override {
+    virtual std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
         TheRewriter.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
         return std::make_unique<StaticRemoverConsumer>(&CI.getASTContext(), TheRewriter);
     }
@@ -119,6 +199,26 @@ int main(int argc, const char **argv) {
     }
     CommonOptionsParser &OptionsParser = ExpectedParser.get();
     ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+    
+    std::vector<std::string> RuntimeFlags;
+    if (!FlagFileOpt.empty()) {
+        RuntimeFlags = LoadFlagsFromFile(FlagFileOpt);
+    }
+
+    Tool.appendArgumentsAdjuster(
+        [&](const CommandLineArguments &Args, StringRef Filename) {
+            CommandLineArguments AdjustedArgs;
+            for (const auto &Arg : Args) {
+                if (!isBlocked(Arg)) AdjustedArgs.push_back(Arg);
+            }
+            for (const auto &Flag : RuntimeFlags) {
+                if (!isBlocked(Flag)) AdjustedArgs.push_back(Flag);
+            }
+            AdjustedArgs.push_back("-x");
+            AdjustedArgs.push_back("c");
+            return AdjustedArgs;
+        }
+    );
 
     return Tool.run(newFrontendActionFactory<StaticRemoverAction>().get());
 }
