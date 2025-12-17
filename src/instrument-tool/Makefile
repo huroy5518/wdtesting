@@ -2,7 +2,7 @@
 
 LLVM_CONFIG:=$(shell llvm-config --cxxflags --ldflags --libs)
 
-all: instrument mock
+all: instrument mock module_init_macro
 
 instrument: instrument.cpp
 	clang++ instrument.cpp   -O3 $(LLVM_CONFIG)   -Wl,--start-group   -lclangTooling   -lclangFrontend   -lclangSerialization   -lclangDriver   -lclangParse   -lclangSema   -lclangAnalysis   -lclangASTMatchers   -lclangEdit   -lclangAST   -lclangLex   -lclangBasic   -lclangSupport   -lclangAPINotes -lclangRewrite  -Wl,--end-group   -o instrument

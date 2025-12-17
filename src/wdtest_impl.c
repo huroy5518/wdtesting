@@ -3,6 +3,14 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#ifdef __KERNEL__
+
+#include <linux/slab.h>
+#include <linux/types.h>
+#define malloc(size) kmalloc(size, GFP_KERNEL)
+
+#endif
+
 struct ds_list_head task_list;
 
 void init_test() {
@@ -53,10 +61,17 @@ int check_u64_eq(u64 a, u64 b, struct test_info info) {
     }
 
     if (a != b) {
-        print_failed(&info);
         return -1;
     }
 
+}
+
+int check_mem_eq(void *a, void *b, int size, struct test_info info) {
+    if (memcmp(a, b, size) == 0) {
+        return 0;
+    }
+
+    return 1;
 }
 
 void init_test_task(char *name, struct test_task *new_task, test_fp fp) {
@@ -67,6 +82,7 @@ void init_test_task(char *name, struct test_task *new_task, test_fp fp) {
 }
 
 void add_test(char *name, test_fp fp) {
+    
     struct test_task *new_task = malloc(sizeof(struct test_task));
     init_test_task(name, new_task, fp);
 }

@@ -247,6 +247,10 @@ int main(int argc, const char **argv) {
     }
     CommonOptionsParser &OptionsParser = ExpectedParser.get();
     ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+    Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster("-Wno-error=implicit-function-declaration", ArgumentInsertPosition::BEGIN));
+
+    // Also useful: allow int return type by default (for older C behavior)
+    Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster("-Wno-error=strict-prototypes", ArgumentInsertPosition::BEGIN));
 
     return Tool.run(newFrontendActionFactory<InstrumentationAction>().get());
 }
