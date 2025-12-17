@@ -1,39 +1,38 @@
-.PHONY: all clean test
+.PHONY: all pre compile post clean test
 
-SRCS:=$(wildcard *.c)
-OBJS:=$(SRCS:.c=.o)
+all: tool pre compile post
 
-%.o: %.c
-	gcc -c $^ -o $@
-	
-test: $(OBJS) test/test.c
-	gcc -o test/test test/test.c $(OBJS)
+SRC_DIR:=src
+TEST_INCLUDE_DIR:=$(realpath ./_test)
+TEST_SRCS:=$(wildcard $(SRC_DIR)/*.c)
+TEST_OBJS:=$(patsubst $(SRC_DIR)/%.c, ./%.o, $(TEST_SRCS))
+# TEST_OBJS=$(TEST_SRCS:.c=.o)
 
-
-all: pre compile post
+tool:
+	@echo "[*] Compile Instrument Tool"
+	make -C instrument-tool
 
 pre:
-	./script/pre-stage.sh
-	
+	@echo "[*] First Compile to Generate Compilation Flags"
+	@echo ${KDIR}
+	@echo ${ARCH}
+	@echo ${CROSS_COMPILE}
+	make -C ../ clean
+	bear --output _compile_flag.json -- make -j$(nproc) -C ../
+	python3 ./script/parse_compile_flag.py _compile_flag.json > _compile_flag.txt
+	bash ./script/pre-stage.sh
+	@echo "[*] Build Tools"
+	make -C _test KDIR="${KDIR}" TEST_OBJS="${TEST_OBJS}" TEST_INCLUDE="${TEST_INCLUDE_DIR}"
+
 compile:
-	echo $(KERNEL_INCLUDE_OPT)
-	echo $(MAKE)
-# 	make -C ath12k
-# 		CC="$(CC)" \
-#  		CFLAGS="$(CFLAGS)" \
-# 		KERNEL_INCLUDE_OPT="$(KERNEL_INCLUDE_OPT)"
-# 		LDFLAGS=$(LDFLAGS)
-
-
-# 	echo "In compile"
-# 	echo $(CC)
-# 	echo $(CFLAG)
-# 	echo $(LDFLAGS)
+	@echo "In compile"
 	
 post:
 	./script/post-stage.sh
 
+test: $(OBJS) test/test.c
+	gcc -o test/test test/test.c $(OBJS)
+
 
 clean:
-	echo "Clean"
-	
+	@echo "clean"

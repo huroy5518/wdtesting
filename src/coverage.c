@@ -1,7 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "coverage.h"
+#include <linux/module.h>
+#include "top.h"
+MODULE_LICENSE("GPL");
 // Global registry
 // static block_registry_entry_t registry[MAX_TRACKED_BLOCKS];
 // static unsigned long long total_registered_blocks = 0;
@@ -30,19 +29,4 @@ void beginning_func(int idx) {
 void end_func(int idx) {
     // No-op for basic coverage
     registry[idx].end_hit_count ++;
-}
-
-/**
- * print_coverage_report
- * * Automatically called when the program exits (via main return or exit()).
- * Prints the registry state.
- */
-void __attribute__((destructor)) print_coverage_report() {
-    for (int i = 0; i < MAX_TRACKED_BLOCKS; i ++) {
-        printf("Block %d: Begin Hit Count = %llu, End Hit Count = %llu\n", 
-            i, 
-            registry[i].begin_hit_count,
-            registry[i].end_hit_count
-        );
-    }
 }

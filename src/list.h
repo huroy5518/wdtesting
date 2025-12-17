@@ -1,6 +1,7 @@
 #ifndef __DS_LIST_H
 #define __DS_LIST_H
 
+#include <linux/stddef.h>
 struct ds_list_head {
     struct ds_list_head *next, *prev;
 };

@@ -1,5 +1,6 @@
 #include "list.h"
-#include <stddef.h>
+#include <linux/module.h>
+MODULE_LICENSE("GPL");
 
 void ds_list_head_init(struct ds_list_head *head) {
     head->next = head;

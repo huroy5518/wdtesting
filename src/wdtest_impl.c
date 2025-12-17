@@ -1,15 +1,16 @@
-#include <stdlib.h>
 #include "wdtest_impl.h"
-#include <stddef.h>
-#include <stdio.h>
 
 #ifdef __KERNEL__
 
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/stddef.h>
 #define malloc(size) kmalloc(size, GFP_KERNEL)
 
 #endif
+#include <linux/module.h>
+#include "top.h"
+MODULE_LICENSE("GPL");
 
 struct ds_list_head task_list;
 
@@ -17,19 +18,20 @@ void init_test() {
     ds_list_head_init(&task_list);
 }
 
-void print_failed(struct test_info *info) {
-    printf("Test Failed!, file=%s, line=%d\n", info->file, info->line);
-}
+// void print_failed(struct test_info *info) {
+//     printf("Test Failed!, file=%s, line=%d\n", info->file, info->line);
+// }
 
-int check_i32_eq(i32 a, i32 b, struct test_info info) {
+int check_i32_eq(s32 a, s32 b, struct test_info info) {
     if (a == b) {
         return 0;
     }
 
     if (a != b) {
-        print_failed(&info);
+        // print_failed(&info);
         return -1;
     }
+    return -1;
 }
 
 int check_u32_eq(u32 a, u32 b, struct test_info info) {
@@ -38,21 +40,24 @@ int check_u32_eq(u32 a, u32 b, struct test_info info) {
     }
 
     if (a != b) {
-        print_failed(&info);
+        // print_failed(&info);
         return -1;
     }
-
+    
+    return -1;
 }
 
-int check_i64_eq(i64 a, i64 b, struct test_info info) {
+int check_i64_eq(s64 a, s64 b, struct test_info info) {
     if (a == b) {
         return 0;
     }
 
     if (a != b) {
-        print_failed(&info);
+        // print_failed(&info);
         return -1;
     }
+    
+    return -1;
 }
 
 int check_u64_eq(u64 a, u64 b, struct test_info info) {
@@ -63,7 +68,8 @@ int check_u64_eq(u64 a, u64 b, struct test_info info) {
     if (a != b) {
         return -1;
     }
-
+    
+    return -1;
 }
 
 int check_mem_eq(void *a, void *b, int size, struct test_info info) {
@@ -71,7 +77,7 @@ int check_mem_eq(void *a, void *b, int size, struct test_info info) {
         return 0;
     }
 
-    return 1;
+    return -1;
 }
 
 void init_test_task(char *name, struct test_task *new_task, test_fp fp) {
