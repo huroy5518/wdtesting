@@ -1,4 +1,5 @@
 #include "wdtest_impl.h"
+#include "coverage.h"
 
 #ifdef __KERNEL__
 
@@ -13,14 +14,16 @@
 MODULE_LICENSE("GPL");
 
 struct ds_list_head task_list;
+extern void TEST_CASES(void);
 
 void init_test() {
     ds_list_head_init(&task_list);
+    TEST_CASES();
 }
 
-// void print_failed(struct test_info *info) {
-//     printf("Test Failed!, file=%s, line=%d\n", info->file, info->line);
-// }
+void print_failed(struct test_info *info) {
+    pr_err("\t[Test Failed!], file=%s, line=%d\n", info->file, info->line);
+}
 
 int check_i32_eq(s32 a, s32 b, struct test_info info) {
     if (a == b) {
@@ -28,7 +31,7 @@ int check_i32_eq(s32 a, s32 b, struct test_info info) {
     }
 
     if (a != b) {
-        // print_failed(&info);
+        print_failed(&info);
         return -1;
     }
     return -1;
@@ -40,7 +43,7 @@ int check_u32_eq(u32 a, u32 b, struct test_info info) {
     }
 
     if (a != b) {
-        // print_failed(&info);
+        print_failed(&info);
         return -1;
     }
     
@@ -53,7 +56,7 @@ int check_i64_eq(s64 a, s64 b, struct test_info info) {
     }
 
     if (a != b) {
-        // print_failed(&info);
+        print_failed(&info);
         return -1;
     }
     
@@ -66,6 +69,7 @@ int check_u64_eq(u64 a, u64 b, struct test_info info) {
     }
 
     if (a != b) {
+        print_failed(&info);
         return -1;
     }
     
@@ -95,9 +99,11 @@ void add_test(char *name, test_fp fp) {
 
 
 void run_test() {
+    clean_registry();
     struct ds_list_head *cur = task_list.next;
     while (cur != &task_list) {
         struct test_task *cur_task = container_of(cur, struct test_task, head);
+        pr_warn("[%s] Running Task\n", cur_task->name);
         int cur_state = cur_task->fp();
 
         cur = cur->next;

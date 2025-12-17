@@ -12,6 +12,8 @@ typedef struct {
 
 void beginning_func(int idx);
 void end_func(int idx);
-
+int _wd_get_end_blk_count(int idx);
+int _wd_get_begin_blk_count(int idx);
+void clean_registry(void);
 
 #endif

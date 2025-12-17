@@ -17,12 +17,18 @@ static ssize_t read_result(struct file *file, char __user *user_buf,
 {
     // 1. Allocate a kernel buffer to hold your output
     //    (Make sure it's large enough for your formatted string)
-    char kbuf[64]; 
+    char kbuf[2048]; 
     int len;
 
     // 2. Format your data into the kernel buffer
     //    scnprintf is preferred over snprintf in kernel (returns actual length)
-    len = scnprintf(kbuf, sizeof(kbuf), "Counter value: %d\n", 0);
+    // len = scnprintf(kbuf, sizeof(kbuf), "Counter value: %d\n", 0);
+    for (int i = 0; i < MAX_TRACKED_BLOCKS; i ++) {
+        if (_wd_get_begin_blk_count(i) == 0 && _wd_get_end_blk_count(i) == 0) {
+            continue;
+        }
+        len += scnprintf(kbuf + len, sizeof(kbuf), "%d,%d,%d\n", i, _wd_get_begin_blk_count(i), _wd_get_end_blk_count(i));
+    }
 
     // 3. Copy to user with offset handling
     //    Arg 1: Destination (User)
@@ -42,6 +48,8 @@ static ssize_t trigger_write(struct file *file, const char __user *user_buf,
 
     // Limit buffer size to prevent overflows
     int len = min(count, (size_t)sizeof(buf) - 1);
+    
+    RUN_TEST();
 
     if (copy_from_user(buf, user_buf, len))
         return -EFAULT;
@@ -71,7 +79,7 @@ static const struct file_operations trigger_fops = {
 };
 
 void create_test_debugfs(void) {
-    
+    pr_info("Creating wdtesting debugfs file\n");
     INIT_TEST();
     test_debugfs_dir = debugfs_create_dir(WDTEST_DEBUGFS_NAME, NULL);
 
@@ -80,7 +88,7 @@ void create_test_debugfs(void) {
         return;
     }
     
-    debugfs_create_file("trigger_test", 0644, test_debugfs_dir, NULL, &gather_fops);
+    debugfs_create_file("trigger_test", 0666, test_debugfs_dir, NULL, &trigger_fops);
     debugfs_create_file("gather_test_result", 0644, test_debugfs_dir, NULL, &gather_fops);
 }
 

@@ -30,3 +30,18 @@ void end_func(int idx) {
     // No-op for basic coverage
     registry[idx].end_hit_count ++;
 }
+
+int _wd_get_begin_blk_count(int idx) {
+    return registry[idx].begin_hit_count;
+}
+
+int _wd_get_end_blk_count(int idx) {
+    return registry[idx].end_hit_count;
+}
+
+void clean_registry(void) {
+    for (int i = 0; i < MAX_TRACKED_BLOCKS; i ++) {
+        registry[i].end_hit_count = 0;
+        registry[i].begin_hit_count = 0;
+    }
+}
