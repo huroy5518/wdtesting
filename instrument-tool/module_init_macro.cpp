@@ -49,11 +49,29 @@ public:
       if (CompoundStmt *CS = dyn_cast<CompoundStmt>(Body)) {
         if (!CS->body_empty()) {
            // 取得最後一個語句 (通常是 return)
-           Stmt *LastStmt = CS->body_back();
+          //  Stmt *LastStmt = CS->body_back();
+          //  while(LastStmt->getKind() != Stmt::Kind::Return) {
+          //      LastStmt = LastStmt->getPrevNode();
+          //  }
+            for (auto I = CS->body_rbegin(); I != CS->body_rend(); ++I) {
+              Stmt *CurrentStmt = *I;
+
+              // Check if the current statement is a ReturnStmt
+              if (isa<ReturnStmt>(CurrentStmt)) {
+                  // Found the return statement!
+                  ReturnStmt *RS = cast<ReturnStmt>(CurrentStmt);
+                  
+                  // Do your logic here...
+                  // llvm::outs() << "Found return at line: " ...
+                   std::string CallCode = "    /* Tool Hook */\n    create_test_debugfs();\n    ";
+                  //  TheRewriter.InsertText(LastStmt->getBeginLoc(), CallCode, true, true);
+                   TheRewriter.InsertText(CurrentStmt->getBeginLoc(), CallCode, true, true);
+                  
+                  break; // Stop loop once found
+              }
+            }
            
            // 在最後一個語句的開頭位置插入呼叫
-           std::string CallCode = "    /* Tool Hook */\n    create_test_debugfs();\n    ";
-           TheRewriter.InsertText(LastStmt->getBeginLoc(), CallCode, true, true);
         }
       }
     }
