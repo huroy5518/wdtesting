@@ -1,50 +1,39 @@
-include $(TOPDIR)/rules.mk
-include $(INCLUDE_DIR)/kernel.mk
+.PHONY: all clean test
 
-PKG_NAME:=wifi-driver-testing
-PKG_VERSION:=1.0
-PKG_RELEASE:=1
+SRCS:=$(wildcard *.c)
+OBJS:=$(SRCS:.c=.o)
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
-SRC_DIR=src
+%.o: %.c
+	gcc -c $^ -o $@
+	
+test: $(OBJS) test/test.c
+	gcc -o test/test test/test.c $(OBJS)
 
-KERNEL_INCLUDE_OPT:=-I$(LINUX_DIR)/include -I$(LINUX_DIR)/user_headers/include
 
-include $(INCLUDE_DIR)/package.mk
+all: pre compile post
 
-define Package/wifi-driver-testing
-	SECTION:=utils
-	CATEGORY:=Utilities
-	TITLE:=Try to test wifi-driver
-	DEPENDS:=
-	MENU:=1
-endef
+pre:
+	./script/pre-stage.sh
+	
+compile:
+	echo $(KERNEL_INCLUDE_OPT)
+	echo $(MAKE)
+# 	make -C ath12k
+# 		CC="$(CC)" \
+#  		CFLAGS="$(CFLAGS)" \
+# 		KERNEL_INCLUDE_OPT="$(KERNEL_INCLUDE_OPT)"
+# 		LDFLAGS=$(LDFLAGS)
 
-define Package/wif-driver-testing/description
-	This is a wifi-driver testing framework
-endef
 
-define Package/wifi-driver-testing/config
-        source "$(SOURCE)/Config.in"
-endef
+# 	echo "In compile"
+# 	echo $(CC)
+# 	echo $(CFLAG)
+# 	echo $(LDFLAGS)
+	
+post:
+	./script/post-stage.sh
 
-define Build/Prepare
-	mkdir -p $(PKG_BUILD_DIR)
-	cp -R ./src/* $(PKG_BUILD_DIR)/
-endef
 
-define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR) \
-		$(TARGET_CONFIGURE_OPTS) \
-		CC="$(TARGET_CC)" \
-		CFLAGS="$(TARGET_CFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)" \
-		KERNEL_INCLUDE_OPT="$(KERNEL_INCLUDE_OPT)" \
-		MAKE="$(MAKE)"
-endef
-
-define Package/wifi-driver-testing/install
-	echo "No Install"
-endef
-
-$(eval $(call BuildPackage,wifi-driver-testing))
+clean:
+	echo "Clean"
+	
