@@ -6,6 +6,10 @@ SRC_DIR:=src
 TEST_INCLUDE_DIR:=$(realpath ./_test)
 TEST_SRCS:=$(wildcard $(SRC_DIR)/*.c)
 TEST_OBJS:=$(patsubst $(SRC_DIR)/%.c, ./%.o, $(TEST_SRCS))
+
+_DIR:=$(shell dirname $(TEST_FILES))
+TMP=$(patsubst $(_DIR)/%.c, ./%.o, $(TEST_FILES))
+TEST_OBJS+=$(patsubst $(_DIR)/%.c, ./%.o, $(TEST_FILES))
 # TEST_OBJS=$(TEST_SRCS:.c=.o)
 
 tool:
@@ -13,6 +17,7 @@ tool:
 	make -C instrument-tool
 
 pre:
+	@echo "asdfasdfasdfsadf ${TMP} ${DIR}"
 	@echo "[*] First Compile to Generate Compilation Flags"
 	@echo ${KDIR}
 	@echo ${ARCH}
@@ -20,8 +25,9 @@ pre:
 	make -C ../ clean
 	bear --output _compile_flag.json -- make -j$(nproc) -C ../
 	python3 ./script/parse_compile_flag.py _compile_flag.json > _compile_flag.txt
-	bash ./script/pre-stage.sh
+	./script/pre-stage.sh
 	@echo "[*] Build Tools"
+	make -j$(nproc) -C ${KDIR} ARCH="${ARCH}" CROSS_COMPILE="${CROSS_COMPILE}" modules_prepare
 	make -C _test KDIR="${KDIR}" TEST_OBJS="${TEST_OBJS}" TEST_INCLUDE="${TEST_INCLUDE_DIR}"
 
 compile:
