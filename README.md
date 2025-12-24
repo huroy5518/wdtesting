@@ -95,6 +95,8 @@ The `instrument-tool/` directory contains a set of Clang-based tools for C code 
 -   **`remove_static`**: A tool to remove the `static` keyword from functions and variables.
 
 ## Usage
+You may check `example` branch for the example.
+
 The expected folder structure for using this framework is like the following:
 ```
 ├───<src_of_your_module>
