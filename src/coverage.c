@@ -18,16 +18,7 @@ void beginning_func(int idx) {
     // 1. Try to find existing block (Linear search)
     registry[idx].begin_hit_count ++;
 }
-
-/**
- * end_func
- * * Called at the end of blocks or before returns.
- * Currently a placeholder, but can be used for:
- * - Stack depth tracking (to ensure function enters/exits match)
- * - Timing execution of blocks
- */
 void end_func(int idx) {
-    // No-op for basic coverage
     registry[idx].end_hit_count ++;
 }
 

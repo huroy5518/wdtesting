@@ -25,6 +25,7 @@ for i in $SRCS; do
     ./instrument-tool/instrument $file -o _test/$i --flags-file=./_compile_flag.txt -- --target=aarch64-linux-gnu
     sed -i '1i#include "top.h"' _test/$i
 
+    # ./instrument-tool/mock ${TEST_FILES} _test/$i --suffix="" --flags-file=./_compile_flag.txt -- --target=aarch64-linux-gnu
     ./instrument-tool/module_init_macro _test/$i -o _test/$i --flags-file=./_compile_flag.txt -- --target=aarch64-linux-gnu
     ./instrument-tool/remove_static _test/$i -o _test/$i --flags-file=./_compile_flag.txt -- --target=aarch64-linux-gnu
     ./instrument-tool/expose_function _test/$i -o _test/$i --flags-file=./_compile_flag.txt -- --target=aarch64-linux-gnu

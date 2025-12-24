@@ -16,6 +16,8 @@ MODULE_LICENSE("GPL");
 struct ds_list_head task_list;
 extern void TEST_CASES(void);
 
+void MOCK_FUNC(const char* FuncName, const char* NewName) {}
+
 void init_test() {
     ds_list_head_init(&task_list);
     TEST_CASES();
